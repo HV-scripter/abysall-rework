@@ -1054,6 +1054,12 @@ Groupboxes.General_Character:AddToggle("RemoveAcceleration", {
 
 local CustomPhysics
 
+Options.SpeedBoostSlider:OnChanged(function(Value)
+	if RemotesFolder:FindFirstChild("Crouch") then
+		RemotesFolder.Crouch:FireServer(Value and true or Functions.IsCrouching(), true)
+	end
+end)
+
 Toggles.NoclipToggle:AddKeyPicker("NoclipKeybind", {
 	Text = "Noclip", Default = "N", Mode = "Toggle", SyncToggleState = true
 })
@@ -1430,60 +1436,11 @@ end)
 Toggles.PositionSpoof:AddKeyPicker("PositionSpoof", {
 	Text = "Position Spoof", Default = "B", Mode = "Toggle", SyncToggleState = true
 })
-
-local heartbeatConnection = nil
-
-local function applyCrouchings(value)
-    if LocalPlayer.Character then
-        LocalPlayer.Character:SetAttribute("Crouching", value)
-    end
-end
-
-local function startCrouchingWatch()
-    if heartbeatConnection then return end
-    heartbeatConnection = RunService.Heartbeat:Connect(function()
-        if Toggles.CrouchSpoof.Value then
-            if LocalPlayer.Character and LocalPlayer.Character:GetAttribute("Crouching") ~= true then
-                LocalPlayer.Character:SetAttribute("Crouching", true)
-            end
-        end
-    end)
-end
-
-local function stopCrouchingWatch()
-    if heartbeatConnection then
-        heartbeatConnection:Disconnect()
-        heartbeatConnection = nil
-    end
-end
-
-Toggles.CrouchSpoof:OnChanged(function(value)
-    if value then
-        applyCrouchings(true)
-        startCrouchingWatch()
-    else
-        applyCrouchings(false)
-        stopCrouchingWatch()
-    end
+Toggles.CrouchSpoof:OnChanged(function(Value)
+	if RemotesFolder:FindFirstChild("Crouch") then
+		RemotesFolder.Crouch:FireServer(Value and true or Functions.IsCrouching(), true)
+	end
 end)
-
--- Обработчик респавна персонажа
-LocalPlayer.CharacterAdded:Connect(function(LocalPlayer.Character)
-    LocalPlayer.Character:WaitForChild("Humanoid", 5)
-    if Toggles.CrouchSpoof.Value then
-        applyCrouchings(true)
-        if not heartbeatConnection then
-            startCrouchingWatch()
-        end
-    end
-end)
-
-if Toggles.CrouchSpoof.Value then
-    applyCrouchings(true)
-    startCrouchingWatch()
-else
-    applyCrouchings(false)
-end
 
 Groupboxes.Exploits_Remove = Tabs.Exploits:AddRightGroupbox("Remove")
 Groupboxes.Exploits_Remove:AddToggle("RemoveScreech", { Text = "Remove Screech",  Default = false, Tooltip = "Prevents 'Screech' from spawning." })
@@ -3067,6 +3024,18 @@ Functions.HandleCharacter = function(NewCharacter)
 			Globals.MainUI.Statistics.Death.Text = "Died to Abysall Hub"
 		end
 
+		local MainFrame = Globals.MainUI:FindFirstChild("MainFrame")
+		if MainFrame then
+			local Effects = MainFrame.Healthbar:FindFirstChild("Effects")
+			if Effects and Effects:FindFirstChild("Crouching") then
+				Effects.Crouching.Visible = Functions.IsCrouching()
+			end
+		end
+
+		if (Toggles.CrouchSpoof.Value or Toggles.PositionSpoof.Value) and RemotesFolder:FindFirstChild("Crouch") then
+			RemotesFolder.Crouch:FireServer(true, true)
+		end
+
 		if Floor ~= "Fools" and Floor ~= "OldHotel" and not Camera:FindFirstChild("MinecartRig") then
 			RootPart.CanCollide = false
 		end
@@ -3149,6 +3118,13 @@ Functions.HandleCharacter = function(NewCharacter)
 			end
 		end
 
+		if RemotesFolder:FindFirstChild("Crouch") and tick() - Globals.LastCrouchFire > 0.1 then
+			local IsCrouch = Functions.IsCrouching()
+			if Toggles.CrouchSpoof.Value or Toggles.PositionSpoof.Value then IsCrouch = true end
+			RemotesFolder.Crouch:FireServer(IsCrouch, true)
+			Globals.LastCrouchFire = tick()
+		end
+
 		if tick() - Globals.LastAnimationCheck > 0.1 then
 			local Sliding = false
 			for _, Anim in Humanoid:GetPlayingAnimationTracks() do
@@ -3159,6 +3135,9 @@ Functions.HandleCharacter = function(NewCharacter)
 		end
 
 		Character:SetAttribute("Sliding", Globals.Sliding)
+		if Character:GetAttribute("Crouching") ~= Functions.IsCrouching() then
+			Character:SetAttribute("Crouching", Functions.IsCrouching())
+		end
 
 		RayParams.FilterDescendantsInstances = { Character }
 		local TPOffset = CFrame.new(Options.ThirdPersonOffsetX.Value, Options.ThirdPersonOffsetY.Value, Options.ThirdPersonOffsetZ.Value)
@@ -3227,6 +3206,11 @@ Functions.HandleCharacter = function(NewCharacter)
 	end)
 
 	task.wait(1)
+	if Toggles.PositionSpoof.Value and Floor ~= "Fools" and Floor ~= "OldHotel" then
+		RootPart.CFrame = RootPart.CFrame * CFrame.new(0, -2.346, 0)
+		Humanoid.HipHeight = 0.05
+		RemotesFolder.Crouch:FireServer(true, true)
+	end
 
 	local Jam = Globals.MainUI.Initiator.Main_Game.Health:FindFirstChild("Jam")
 	if Jam and Toggles.RemoveJamminMusic.Value then
